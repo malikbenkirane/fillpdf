@@ -68,7 +68,6 @@ func handleFillform(w http.ResponseWriter, r *http.Request) {
 		templatePath,
 		"fill_form", fdfFile,
 		"output", outputFile,
-		"flatten",
 	}
 
 	if err := runCommandInPath(tmpDir, "pdftk", args...); err != nil {
