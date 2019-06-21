@@ -48,39 +48,55 @@ func handleFillform(w http.ResponseWriter, r *http.Request) {
 		os.RemoveAll(tmpDir)
 	}()
 
-	fdfFile := filepath.Clean(tmpDir + "/data.fdf")
-	if err := createFdfFile(ffReq.Form, fdfFile, ffReq.CheckedString, ffReq.UncheckedString); err != nil {
-		log.Println(err)
-		http.Error(w, "could not create fdf file", http.StatusInternalServerError)
-		return
-	}
+	var f *os.File
+	if ffReq.Form != nil {
+		fdfFile := filepath.Clean(tmpDir + "/data.fdf")
+		if err := createFdfFile(ffReq.Form, fdfFile, ffReq.CheckedString, ffReq.UncheckedString); err != nil {
+			log.Println(err)
+			http.Error(w, "could not create fdf file", http.StatusInternalServerError)
+			return
+		}
 
-	templatePath, err := filepath.Abs(ffReq.Filename)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "could not set abs template path", http.StatusInternalServerError)
-		return
-	}
-	outputFile := filepath.Clean(tmpDir + "/output.pdf")
+		templatePath, err := filepath.Abs(ffReq.Filename)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "could not set abs template path", http.StatusInternalServerError)
+			return
+		}
+		outputFile := filepath.Clean(tmpDir + "/output.pdf")
 
-	// Create the pdftk command line arguments.
-	args := []string{
-		templatePath,
-		"fill_form", fdfFile,
-		"output", outputFile,
-	}
+		// Create the pdftk command line arguments.
+		args := []string{
+			templatePath,
+			"fill_form", fdfFile,
+			"output", outputFile,
+		}
 
-	if err := runCommandInPath(tmpDir, "pdftk", args...); err != nil {
-		log.Println(err)
-		http.Error(w, "pdftk reported an error", http.StatusInternalServerError)
-		return
-	}
+		if err := runCommandInPath(tmpDir, "pdftk", args...); err != nil {
+			log.Println(err)
+			http.Error(w, "pdftk reported an error", http.StatusInternalServerError)
+			return
+		}
 
-	f, err := os.Open(outputFile)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "could not open output file", http.StatusInternalServerError)
-		return
+		f, err = os.Open(outputFile)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "could not open output file", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		documentPath, err := filepath.Abs(ffReq.Filename)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "could not set abs template path", http.StatusInternalServerError)
+			return
+		}
+		f, err = os.Open(documentPath)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "could not open output file", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	http.ServeContent(w, r, "out.pdf", time.Now(), f)
