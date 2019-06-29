@@ -1,0 +1,10 @@
+#
+# Light container
+#
+# 1. compile a static binary for iron/base
+# docker run --rm -it -v $GOPATH:/go -v `pwd^:/app -e 'GOPATH=/go' -w /app golang sh -c 'CGO_ENABLED=0 go build -a --installsuffix cgo --ldflags="-s" -o fillpdf'
+#
+FROM iron/base
+WORKDIR /app
+COPY fillpdf /app
+ENTRYPOINT ["./fillpdf"]
