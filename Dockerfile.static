@@ -5,6 +5,7 @@
 # docker run --rm -it -v $GOPATH:/go -v `pwd^:/app -e 'GOPATH=/go' -w /app golang sh -c 'CGO_ENABLED=0 go build -a --installsuffix cgo --ldflags="-s" -o fillpdf'
 #
 FROM iron/base
+RUN apk update; apk add pdftk
 WORKDIR /app
 COPY fillpdf /app
 ENTRYPOINT ["./fillpdf"]
