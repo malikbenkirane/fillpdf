@@ -1,11 +1,10 @@
-#
-# Light container
-#
-# 1. compile a static binary for iron/base
-# docker run --rm -it -v $GOPATH:/go -v `pwd^:/app -e 'GOPATH=/go' -w /app golang sh -c 'CGO_ENABLED=0 go build -a --installsuffix cgo --ldflags="-s" -o fillpdf'
-#
+FROM golang
+RUN go get -v github.com/malikbenkirane/fillpdf
+WORKDIR /go/src/github.com/malikbenkirane/fillpdf
+RUN CGO_ENABLED=0 GOOS=linux go build -a --installsuffix cgo -o app .
+
 FROM iron/base
 RUN apk update; apk add pdftk
-WORKDIR /app
-COPY fillpdf /app
-ENTRYPOINT ["./fillpdf"]
+WORKDIR /root
+COPY --from=0 /go/src/github.com/malikbenkirane/fillpdf/app . 
+CMD ["./app"]
