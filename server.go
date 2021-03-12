@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var pdfServerHOST = os.Getenv("REMOTE_PDF_SERVER")
+
 type fillformRequest struct {
 	Form            Form   `json:"form"`
 	Filename        string `json:"filename"`
@@ -48,6 +50,71 @@ func handleFillform(w http.ResponseWriter, r *http.Request) {
 		os.RemoveAll(tmpDir)
 	}()
 
+	var templatePath string
+
+	if pdfServerHOST == "" {
+		// asumming that the pdf file is available locally.
+		var err error
+		templatePath, err = filepath.Abs(ffReq.Filename)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "could not set abs template path", http.StatusInternalServerError)
+			return
+		}
+	} else {
+
+		// Get pdf file from tdocServePDF service.
+		//  write the file to the tmp folder.
+		response, err := http.Get(fmt.Sprintf("%s/%s", pdfServerHOST, ffReq.Filename))
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "document blob get request failed", http.StatusInternalServerError)
+			return
+		}
+		defer response.Body.Close()
+
+		if response.StatusCode == http.StatusOK {
+			data := struct {
+				Document string `json:"document"`
+			}{}
+			if err := json.NewDecoder(response.Body).Decode(&data); err != nil {
+				log.Println(err)
+				http.Error(w, fmt.Sprintf("failed to parse json (%v)", err), http.StatusInternalServerError)
+				return
+			}
+			documentData, err := base64.StdEncoding.DecodeString(data.Document)
+			if err != nil {
+				log.Println(err)
+				http.Error(w, "failed to b64 decode response body", http.StatusInternalServerError)
+				return
+			}
+			fd, err := os.Create(filepath.Join(tmpDir, ffReq.Filename))
+			if err != nil {
+				log.Println(err)
+				http.Error(w, "couldn't create file", http.StatusInternalServerError)
+				return
+			}
+			defer fd.Close()
+			if _, err := fd.Write(documentData); err != nil {
+				log.Println(err)
+				http.Error(w, "couldn't write pdf file", http.StatusInternalServerError)
+				return
+			}
+
+			if err := fd.Sync(); err != nil {
+				log.Println(err)
+				http.Error(w, "couldn't sync pdf file", http.StatusInternalServerError)
+				return
+			}
+
+			templatePath = filepath.Join(tmpDir, ffReq.Filename)
+
+		} else {
+			http.Error(w, "couldn't get document from the Pdf Server", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	var f *os.File
 	if ffReq.Form != nil {
 		fdfFile := filepath.Clean(tmpDir + "/data.fdf")
@@ -57,12 +124,6 @@ func handleFillform(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		templatePath, err := filepath.Abs(ffReq.Filename)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "could not set abs template path", http.StatusInternalServerError)
-			return
-		}
 		outputFile := filepath.Clean(tmpDir + "/output.pdf")
 
 		// Create the pdftk command line arguments.
@@ -85,7 +146,7 @@ func handleFillform(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		documentPath, err := filepath.Abs(ffReq.Filename)
+		documentPath, err := filepath.Abs(templatePath)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "could not set abs template path", http.StatusInternalServerError)
